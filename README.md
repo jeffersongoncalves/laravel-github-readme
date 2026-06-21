@@ -14,7 +14,10 @@
 Fetch, render and disk-cache GitHub repository READMEs in your Laravel application. The package issues conditional `If-None-Match` (ETag) requests with a short freshness window, reuses the cached HTML on `304 Not Modified` responses, falls back to stale content on network/API errors, and rewrites relative assets and links to absolute GitHub URLs.
 
 > [!WARNING]
-> The HTML returned by this package is **untrusted** — it comes from third-party GitHub READMEs. Always run it through an HTML sanitizer (for example [`jeffersongoncalves/laravel-html-sanitizer`](https://github.com/jeffersongoncalves/laravel-html-sanitizer)) before rendering it in a browser.
+> The HTML returned by this package is **untrusted** — it comes from third-party GitHub READMEs. The built-in renderer **strips raw HTML** (`html_input => 'strip'`) so an embedded `<script>` in a README cannot become stored XSS, but you should still run the output through an HTML sanitizer (for example [`jeffersongoncalves/laravel-html-sanitizer`](https://github.com/jeffersongoncalves/laravel-html-sanitizer)) before rendering it in a browser. If you supply a custom `renderer` that allows raw HTML, sanitizing the output is **mandatory**.
+
+> [!CAUTION]
+> Pass only **trusted** repository URLs to `fetchHtml()`. The URL determines which GitHub API endpoint is called with your configured token. An attacker-controlled URL can therefore drive token-scoped requests against arbitrary repositories (private-repo read access, rate-limit abuse). If the URL can come from user input, validate it against an allowlist of `owner/repo` values you control before calling `fetchHtml()` — for example `in_array(GitHubReadme::repoFromUrl($url), $allowedRepos, true)`.
 
 ## Installation
 
@@ -128,6 +131,8 @@ Provide your own markdown renderer (for example to add server-side syntax highli
 ```php
 'renderer' => fn (string $markdown): string => \JeffersonGoncalves\Markdown\Markdown::render($markdown, headingPermalinks: true),
 ```
+
+The built-in renderer strips raw HTML (`html_input => 'strip'`). If your custom renderer keeps raw HTML (e.g. `html_input => 'allow'`), you are responsible for sanitizing the result before it reaches a browser.
 
 ## Testing
 

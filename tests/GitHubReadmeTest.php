@@ -118,3 +118,143 @@ it('wraps tables in a md-table-scroll container', function () {
 it('returns null for a non-github url', function () {
     expect(GitHubReadme::fetchHtml('https://gitlab.com/owner/repo'))->toBeNull();
 });
+
+it('serves the stale cached file when the github request errors', function () {
+    Storage::fake('local');
+
+    Http::fakeSequence('api.github.com/*')
+        ->push('# Original', 200, ['ETag' => '"e1"'])
+        ->push('Service Unavailable', 503);
+
+    $first = GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    // Age past the freshness window so a fresh (failing) request is issued.
+    $this->travel(11)->minutes();
+
+    $second = GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    // The 503 falls back to the stale cached file rather than returning null.
+    expect($second)->toBe($first)
+        ->and($second)->toContain('Original');
+
+    Http::assertSentCount(2);
+});
+
+it('returns null on a github error when no cached file exists', function () {
+    Storage::fake('local');
+
+    Http::fake([
+        'api.github.com/*' => Http::response('Not Found', 404),
+    ]);
+
+    expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toBeNull();
+});
+
+it('strips raw html from the rendered readme by default', function () {
+    Storage::fake('local');
+
+    Http::fake([
+        'api.github.com/repos/owner/repo/readme*' => Http::response(
+            "# Safe\n\n<script>alert('xss')</script>",
+            200,
+            ['ETag' => '"abc"'],
+        ),
+    ]);
+
+    $html = GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    expect($html)->toContain('Safe')
+        ->and($html)->not->toContain('<script>');
+});
+
+it('uses a custom renderer callable when configured', function () {
+    Storage::fake('local');
+
+    config()->set('github-readme.renderer', fn (string $markdown): string => '<div class="custom">'.trim($markdown).'</div>');
+
+    Http::fake([
+        'api.github.com/repos/owner/repo/readme*' => Http::response(
+            '# Raw Markdown',
+            200,
+            ['ETag' => '"abc"'],
+        ),
+    ]);
+
+    $html = GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    expect($html)->toContain('<div class="custom">')
+        ->and($html)->toContain('# Raw Markdown');
+});
+
+it('sends the authorization bearer header when a token is configured', function () {
+    Storage::fake('local');
+
+    config()->set('github-readme.token', 'secret-token');
+
+    Http::fake([
+        'api.github.com/*' => Http::response('# Token', 200, ['ETag' => '"e1"']),
+    ]);
+
+    GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    Http::assertSent(function ($request) {
+        return $request->hasHeader('Authorization', 'Bearer secret-token')
+            && $request->hasHeader('User-Agent');
+    });
+});
+
+it('rawurlencodes repo path segments in the api url', function () {
+    Storage::fake('local');
+
+    Http::fake([
+        'api.github.com/*' => Http::response('# Encoded', 200, ['ETag' => '"e1"']),
+    ]);
+
+    GitHubReadme::fetchHtml('https://github.com/owner/repo.name', 'main');
+
+    Http::assertSent(function ($request) {
+        return str_contains($request->url(), 'api.github.com/repos/owner/repo.name/readme');
+    });
+});
+
+it('rewrites relative anchor links to absolute github blob urls', function () {
+    $html = '<a href="LICENSE">License</a>';
+
+    $out = GitHubReadme::rewriteRelativeLinks($html, 'owner/repo', 'main');
+
+    expect($out)->toContain('href="https://github.com/owner/repo/blob/main/LICENSE"');
+});
+
+it('leaves absolute and special anchor links untouched when rewriting', function () {
+    $html = '<a href="https://example.com">Ext</a><a href="#anchor">Hash</a><a href="mailto:a@b.com">Mail</a>';
+
+    $out = GitHubReadme::rewriteRelativeLinks($html, 'owner/repo', 'main');
+
+    expect($out)->toContain('href="https://example.com"')
+        ->and($out)->toContain('href="#anchor"')
+        ->and($out)->toContain('href="mailto:a@b.com"')
+        ->and($out)->not->toContain('blob/main');
+});
+
+it('lazy-loads every image except the first and adds async decoding', function () {
+    $html = '<img src="hero.png"><img src="second.png"><img src="third.png">';
+
+    $out = GitHubReadme::lazyloadImages($html);
+
+    // First image stays eager (LCP candidate) but still gets async decoding.
+    expect($out)->toContain('<img src="hero.png" decoding="async">');
+
+    // Both subsequent images become lazy.
+    expect(substr_count($out, 'loading="lazy"'))->toBe(2);
+
+    // decoding="async" is applied to all three.
+    expect(substr_count($out, 'decoding="async"'))->toBe(3);
+});
+
+it('does not duplicate existing loading and decoding attributes', function () {
+    $html = '<img src="a.png" loading="eager" decoding="sync">';
+
+    $out = GitHubReadme::lazyloadImages($html);
+
+    expect($out)->toBe($html);
+});

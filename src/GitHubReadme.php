@@ -291,7 +291,7 @@ class GitHubReadme
 
         $response = Http::timeout(self::timeout())
             ->withHeaders($headers)
-            ->get("https://api.github.com/repos/{$repo}/readme", $ref ? ['ref' => $ref] : []);
+            ->get('https://api.github.com/repos/'.self::encodeRepoPath($repo).'/readme', $ref ? ['ref' => $ref] : []);
 
         if ($response->status() === 304) {
             return ['status' => 304, 'body' => null, 'etag' => $etag];
@@ -318,11 +318,21 @@ class GitHubReadme
 
         $response = Http::timeout(self::timeout())
             ->withHeaders(self::githubHeaders(['Accept' => 'application/vnd.github+json']))
-            ->get("https://api.github.com/repos/{$repo}");
+            ->get('https://api.github.com/repos/'.self::encodeRepoPath($repo));
 
         $branch = $response->successful() ? $response->json('default_branch') : null;
 
         return is_string($branch) ? $branch : null;
+    }
+
+    /**
+     * rawurlencode each segment of an `owner/repo` path before interpolating it
+     * into a GitHub API URL, so unusual characters cannot break out of the path
+     * or alter the request. The `/` separator is preserved between segments.
+     */
+    private static function encodeRepoPath(string $repo): string
+    {
+        return implode('/', array_map('rawurlencode', explode('/', $repo)));
     }
 
     /**
@@ -355,7 +365,12 @@ class GitHubReadme
     private static function defaultRenderer(string $markdown): string
     {
         $environment = new Environment([
-            'html_input' => 'allow',
+            // Strip raw HTML from the third-party README rather than passing it
+            // through ('allow'). Without this a malicious README could embed a
+            // <script> tag that becomes stored XSS unless the consumer sanitizes.
+            // Users who DO sanitize can opt back into 'allow' via a custom
+            // `renderer` callable in the config.
+            'html_input' => 'strip',
             'allow_unsafe_links' => false,
             'heading_permalink' => [
                 'symbol' => '#',

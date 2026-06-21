@@ -75,8 +75,13 @@ return [
     | rendered HTML. When null, an internal League\CommonMark renderer is used
     | (GitHub Flavored Markdown + heading permalinks).
     |
-    | NOTE: The rendered HTML is UNTRUSTED. Always sanitize it before display,
-    | e.g. with jeffersongoncalves/laravel-html-sanitizer.
+    | The internal renderer STRIPS raw HTML ('html_input' => 'strip') so an
+    | embedded <script> in a third-party README cannot become stored XSS. If you
+    | need raw HTML passed through ('allow'), provide your own renderer callable
+    | here AND sanitize its output yourself before display.
+    |
+    | WARNING: The rendered HTML is still UNTRUSTED. Always sanitize it before
+    | display, e.g. with jeffersongoncalves/laravel-html-sanitizer.
     |
     */
     'renderer' => null,
