@@ -88,6 +88,14 @@ it('rewrites relative html image src to raw.githubusercontent', function () {
     expect($out)->toContain('https://raw.githubusercontent.com/owner/repo/main/docs/banner.png');
 });
 
+it('leaves protocol-relative image src untouched when rewriting assets', function () {
+    $markdown = '<img src="//cdn.example.com/logo.png">';
+
+    $out = GitHubReadme::rewriteRelativeAssets($markdown, 'owner/repo', 'main');
+
+    expect($out)->toContain('src="//cdn.example.com/logo.png"');
+});
+
 it('marks external links with target blank and rel nofollow noopener', function () {
     $html = '<a href="https://example.com">External</a>';
 
@@ -234,6 +242,14 @@ it('leaves absolute and special anchor links untouched when rewriting', function
         ->and($out)->toContain('href="#anchor"')
         ->and($out)->toContain('href="mailto:a@b.com"')
         ->and($out)->not->toContain('blob/main');
+});
+
+it('rewrites root-relative anchor links to repo blob urls', function () {
+    $html = '<a href="/curriculum"><code>/curriculum</code></a>';
+
+    $out = GitHubReadme::rewriteRelativeLinks($html, 'freeCodeCamp/freeCodeCamp', 'main');
+
+    expect($out)->toContain('href="https://github.com/freeCodeCamp/freeCodeCamp/blob/main/curriculum"');
 });
 
 it('lazy-loads every image except the first and adds async decoding', function () {
