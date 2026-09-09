@@ -231,7 +231,7 @@ class GitHubReadme
             function (array $m) use ($base): string {
                 $href = trim($m[2]);
 
-                if ($href === '' || preg_match('~^(https?:|//|mailto:|tel:|javascript:|data:|#|/)~i', $href)) {
+                if ($href === '' || preg_match('~^(https?:|//|mailto:|tel:|javascript:|data:|#)~i', $href)) {
                     return $m[0];
                 }
 
@@ -251,7 +251,7 @@ class GitHubReadme
         $rewrite = static function (string $src) use ($base): string {
             $src = trim($src);
 
-            if (preg_match('#^(https?://|data:|/)#i', $src)) {
+            if (preg_match('#^(https?://|//|data:)#i', $src)) {
                 return $src;
             }
 
