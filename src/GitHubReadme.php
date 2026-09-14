@@ -78,13 +78,23 @@ class GitHubReadme
             try {
                 $disk->put($path, $html);
 
-                $cache->fill([
-                    'etag' => $result['etag'],
-                    'default_branch' => $branch,
-                    'html_path' => $path,
-                    'fetched_at' => now(),
-                    'checked_at' => now(),
-                ])->save();
+                $now = now();
+
+                ReadmeCache::query()->upsert(
+                    [[
+                        'repo' => $repo,
+                        'ref' => $refKey,
+                        'etag' => $result['etag'],
+                        'default_branch' => $branch,
+                        'html_path' => $path,
+                        'fetched_at' => $now,
+                        'checked_at' => $now,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]],
+                    ['repo', 'ref'],
+                    ['etag', 'default_branch', 'html_path', 'fetched_at', 'checked_at', 'updated_at']
+                );
             } catch (\Throwable $e) {
                 Log::warning('GitHubReadme cache write failed', [
                     'repo' => $repo,
