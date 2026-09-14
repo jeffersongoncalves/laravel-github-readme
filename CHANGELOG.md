@@ -2,6 +2,10 @@
 
 All notable changes to `laravel-github-readme` will be documented in this file.
 
+## v2.0.2 - 2026-09-14
+
+Fix race condition on ReadmeCache upsert under concurrent requests (#8, #9).
+
 ## v2.0.1 - 2026-09-09
 
 ### Fixed
