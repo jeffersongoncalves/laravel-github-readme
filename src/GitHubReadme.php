@@ -2,6 +2,8 @@
 
 namespace JeffersonGoncalves\GitHubReadme;
 
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -299,9 +301,18 @@ class GitHubReadme
             $headers['If-None-Match'] = $etag;
         }
 
-        $response = Http::timeout(self::timeout())
-            ->withHeaders($headers)
-            ->get('https://api.github.com/repos/'.self::encodeRepoPath($repo).'/readme', $ref ? ['ref' => $ref] : []);
+        try {
+            $response = Http::timeout(self::timeout())
+                ->withHeaders($headers)
+                ->get('https://api.github.com/repos/'.self::encodeRepoPath($repo).'/readme', $ref ? ['ref' => $ref] : []);
+        } catch (ConnectionException|RequestException $e) {
+            Log::warning('GitHubReadme API request failed', [
+                'repo' => $repo,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ['status' => 0, 'body' => null, 'etag' => $etag];
+        }
 
         if ($response->status() === 304) {
             return ['status' => 304, 'body' => null, 'etag' => $etag];
@@ -326,9 +337,18 @@ class GitHubReadme
             return $cache->default_branch;
         }
 
-        $response = Http::timeout(self::timeout())
-            ->withHeaders(self::githubHeaders(['Accept' => 'application/vnd.github+json']))
-            ->get('https://api.github.com/repos/'.self::encodeRepoPath($repo));
+        try {
+            $response = Http::timeout(self::timeout())
+                ->withHeaders(self::githubHeaders(['Accept' => 'application/vnd.github+json']))
+                ->get('https://api.github.com/repos/'.self::encodeRepoPath($repo));
+        } catch (ConnectionException|RequestException $e) {
+            Log::warning('GitHubReadme default branch lookup failed', [
+                'repo' => $repo,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
 
         $branch = $response->successful() ? $response->json('default_branch') : null;
 
