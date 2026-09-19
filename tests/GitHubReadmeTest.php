@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use JeffersonGoncalves\GitHubReadme\GitHubReadme;
@@ -154,6 +155,37 @@ it('returns null on a github error when no cached file exists', function () {
     Http::fake([
         'api.github.com/*' => Http::response('Not Found', 404),
     ]);
+
+    expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toBeNull();
+});
+
+it('serves the stale cached file when the github request times out', function () {
+    Storage::fake('local');
+
+    Http::fake(['api.github.com/repos/owner/repo/readme*' => Http::response(
+        '# Original',
+        200,
+        ['ETag' => '"e1"'],
+    )]);
+
+    $first = GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    $this->travel(11)->minutes();
+
+    Http::fake(['api.github.com/*' => fn () => throw new ConnectionException(
+        'cURL error 28: Operation timed out after 8002 milliseconds with 0 bytes received'
+    )]);
+
+    $second = GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    expect($second)->toBe($first)
+        ->and($second)->toContain('Original');
+});
+
+it('returns null on a github timeout when no cached file exists', function () {
+    Storage::fake('local');
+
+    Http::fake(['api.github.com/*' => fn () => throw new ConnectionException('cURL error 28: timed out')]);
 
     expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toBeNull();
 });
