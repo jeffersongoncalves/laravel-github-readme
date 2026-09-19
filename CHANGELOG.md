@@ -2,6 +2,14 @@
 
 All notable changes to `laravel-github-readme` will be documented in this file.
 
+## v2.0.3 - 2026-09-19
+
+### What's Changed
+
+* fix: catch ConnectionException on GitHub API timeout by @jeffersongoncalves in https://github.com/jeffersongoncalves/laravel-github-readme/pull/11
+
+**Full Changelog**: https://github.com/jeffersongoncalves/laravel-github-readme/compare/v2.0.2...v2.0.3
+
 ## v2.0.2 - 2026-09-14
 
 Fix race condition on ReadmeCache upsert under concurrent requests (#8, #9).
