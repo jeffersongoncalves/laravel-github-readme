@@ -190,6 +190,27 @@ it('returns null on a github timeout when no cached file exists', function () {
     expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toBeNull();
 });
 
+it('falls back to HEAD when the default branch lookup times out', function () {
+    Storage::fake('local');
+
+    Http::fake([
+        'api.github.com/repos/owner/repo/readme*' => Http::response(
+            '![logo](art/logo.png)',
+            200,
+            ['ETag' => '"abc123"'],
+        ),
+        'api.github.com/repos/owner/repo' => fn () => throw new ConnectionException('cURL error 28: timed out'),
+    ]);
+
+    $html = GitHubReadme::fetchHtml('https://github.com/owner/repo');
+
+    expect($html)->toContain('https://raw.githubusercontent.com/owner/repo/HEAD/art/logo.png');
+
+    $cache = ReadmeCache::query()->where('repo', 'owner/repo')->where('ref', 'default')->first();
+
+    expect($cache->default_branch)->toBeNull();
+});
+
 it('strips raw html from the rendered readme by default', function () {
     Storage::fake('local');
 

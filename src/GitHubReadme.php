@@ -337,9 +337,18 @@ class GitHubReadme
             return $cache->default_branch;
         }
 
-        $response = Http::timeout(self::timeout())
-            ->withHeaders(self::githubHeaders(['Accept' => 'application/vnd.github+json']))
-            ->get('https://api.github.com/repos/'.self::encodeRepoPath($repo));
+        try {
+            $response = Http::timeout(self::timeout())
+                ->withHeaders(self::githubHeaders(['Accept' => 'application/vnd.github+json']))
+                ->get('https://api.github.com/repos/'.self::encodeRepoPath($repo));
+        } catch (ConnectionException|RequestException $e) {
+            Log::warning('GitHubReadme default branch lookup failed', [
+                'repo' => $repo,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
 
         $branch = $response->successful() ? $response->json('default_branch') : null;
 
