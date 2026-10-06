@@ -1,6 +1,6 @@
 <div class="filament-hidden">
 
-![Laravel GitHub Readme](https://raw.githubusercontent.com/jeffersongoncalves/laravel-github-readme/master/art/jeffersongoncalves-laravel-github-readme.png)
+![Laravel GitHub Readme](https://raw.githubusercontent.com/jeffersongoncalves/laravel-github-readme/main/art/jeffersongoncalves-laravel-github-readme.png)
 
 </div>
 
@@ -9,8 +9,8 @@
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-FFDD00?style=flat-square&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/jeffersongoncalves)
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/jeffersongoncalves/laravel-github-readme.svg?style=flat-square)](https://packagist.org/packages/jeffersongoncalves/laravel-github-readme)
-[![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/jeffersongoncalves/laravel-github-readme/tests.yml?branch=master&label=tests&style=flat-square)](https://github.com/jeffersongoncalves/laravel-github-readme/actions?query=workflow%3ATests+branch%3Amaster)
-[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/jeffersongoncalves/laravel-github-readme/fix-php-code-style-issues.yml?branch=master&label=code%20style&style=flat-square)](https://github.com/jeffersongoncalves/laravel-github-readme/actions?query=workflow%3A"Fix+PHP+code+styling"+branch%3Amaster)
+[![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/jeffersongoncalves/laravel-github-readme/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/jeffersongoncalves/laravel-github-readme/actions?query=workflow%3ATests+branch%3Amain)
+[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/jeffersongoncalves/laravel-github-readme/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/jeffersongoncalves/laravel-github-readme/actions?query=workflow%3A"Fix+PHP+code+styling"+branch%3Amain)
 [![Total Downloads](https://img.shields.io/packagist/dt/jeffersongoncalves/laravel-github-readme.svg?style=flat-square)](https://packagist.org/packages/jeffersongoncalves/laravel-github-readme)
 
 Fetch, render and disk-cache GitHub repository READMEs in your Laravel application. The package issues conditional `If-None-Match` (ETag) requests with a short freshness window, reuses the cached HTML on `304 Not Modified` responses, falls back to stale content on network/API errors, and rewrites relative assets and links to absolute GitHub URLs.
