@@ -35,6 +35,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Background Revalidation (stale-while-revalidate)
+    |--------------------------------------------------------------------------
+    |
+    | When enabled and a cached README is outside the check window, the stale
+    | file is returned immediately and the conditional GitHub request runs in
+    | a queued RevalidateReadmeJob (unique per repo/ref) instead of blocking
+    | the caller. A first fetch with no cached file always stays synchronous.
+    | Requires a queue worker. The queue name is null for the default queue.
+    |
+    */
+    'revalidate_in_background' => (bool) env('GITHUB_README_REVALIDATE_IN_BACKGROUND', false),
+
+    'revalidate_queue' => env('GITHUB_README_REVALIDATE_QUEUE'),
+
+    /*
+    |--------------------------------------------------------------------------
     | GitHub API Token
     |--------------------------------------------------------------------------
     |
