@@ -18,6 +18,10 @@ return [
     |       'throw'  => false,
     |   ],
     |
+    | With revalidate_in_background on and the queue worker on another host,
+    | this disk must be shared storage both the web process and the worker
+    | can access, or the web host never sees the refreshed HTML.
+    |
     */
     'disk' => env('GITHUB_README_DISK', 'local'),
 
