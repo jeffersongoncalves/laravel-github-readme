@@ -2,6 +2,23 @@
 
 All notable changes to `laravel-github-readme` will be documented in this file.
 
+## v2.1.0 - 2026-10-24
+
+### What's Changed
+
+* ci: standardize update-changelog workflow (master) by @jeffersongoncalves in https://github.com/jeffersongoncalves/laravel-github-readme/pull/12
+* ci: standardize dependabot config by @jeffersongoncalves in https://github.com/jeffersongoncalves/laravel-github-readme/pull/13
+* ci: standardize tests workflow (master) by @jeffersongoncalves in https://github.com/jeffersongoncalves/laravel-github-readme/pull/14
+* ci: standardize tests workflow (master) by @jeffersongoncalves in https://github.com/jeffersongoncalves/laravel-github-readme/pull/15
+* ci: auto-merge dependabot github-actions minor/patch by @jeffersongoncalves in https://github.com/jeffersongoncalves/laravel-github-readme/pull/16
+* Point branch references to main by @jeffersongoncalves in https://github.com/jeffersongoncalves/laravel-github-readme/pull/17
+* ci: let the Pint workflow push its fixes by @jeffersongoncalves in https://github.com/jeffersongoncalves/laravel-github-readme/pull/18
+* build(deps): Bump shivammathur/setup-php from 2.37.2 to 2.40.0 in the actions-deps group by @dependabot[bot] in https://github.com/jeffersongoncalves/laravel-github-readme/pull/19
+* feat: serve stale README and revalidate in background by @jeffersongoncalves in https://github.com/jeffersongoncalves/laravel-github-readme/pull/22
+* fix: rewrite single-quoted and unquoted href/src attributes by @jeffersongoncalves in https://github.com/jeffersongoncalves/laravel-github-readme/pull/23
+
+**Full Changelog**: https://github.com/jeffersongoncalves/laravel-github-readme/compare/v2.0.3...v2.1.0
+
 ## v2.0.3 - 2026-09-19
 
 ### What's Changed
