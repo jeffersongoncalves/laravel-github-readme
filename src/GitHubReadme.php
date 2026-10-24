@@ -7,6 +7,7 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use JeffersonGoncalves\GitHubReadme\Jobs\RevalidateReadmeJob;
 use JeffersonGoncalves\GitHubReadme\Models\ReadmeCache;
 use League\CommonMark\Environment\Environment;
 use League\CommonMark\Extension\CommonMark\CommonMarkCoreExtension;
@@ -25,6 +26,10 @@ class GitHubReadme
      * the rate limit), a `200` re-renders and rewrites the disk file. On a
      * network/API error the stale file is served if present.
      *
+     * With `revalidate_in_background` on, a stale cached file is returned
+     * immediately and the conditional request runs in a queued
+     * RevalidateReadmeJob instead. A first fetch (no file) stays synchronous.
+     *
      * NOTE: the returned HTML is UNTRUSTED (it comes from a third-party
      * GitHub README). Sanitize it before display, e.g. with
      * jeffersongoncalves/laravel-html-sanitizer.
@@ -37,8 +42,7 @@ class GitHubReadme
             return null;
         }
 
-        $refKey = $ref ?: 'default';
-        $cache = ReadmeCache::query()->firstOrNew(['repo' => $repo, 'ref' => $refKey]);
+        $cache = ReadmeCache::query()->firstOrNew(['repo' => $repo, 'ref' => $ref ?: 'default']);
         $disk = Storage::disk(self::disk());
 
         $hasFile = $cache->html_path !== null && $disk->exists($cache->html_path);
@@ -48,6 +52,42 @@ class GitHubReadme
             && $cache->checked_at->gt(now()->subMinutes(self::checkIntervalMinutes()))) {
             return $disk->get($cache->html_path);
         }
+
+        // Stale-while-revalidate — serve the stale file now, check GitHub in a job.
+        // A queue or unique-lock store outage must not stop the stale file from being served.
+        if ($hasFile && config('github-readme.revalidate_in_background')) {
+            try {
+                RevalidateReadmeJob::dispatch($repo, $ref);
+            } catch (\Throwable $e) {
+                Log::warning('GitHubReadme revalidation dispatch failed', [
+                    'repo' => $repo,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            return $disk->get($cache->html_path);
+        }
+
+        return self::refresh($repo, $ref, $cache, $hasFile);
+    }
+
+    /**
+     * Run the conditional GitHub request for a repo now, ignoring the check
+     * window: `304` bumps `checked_at`, `200` re-renders and persists. Used
+     * by RevalidateReadmeJob; returns the resulting HTML (or null).
+     */
+    public static function revalidate(string $repo, ?string $ref = null): ?string
+    {
+        $cache = ReadmeCache::query()->firstOrNew(['repo' => $repo, 'ref' => $ref ?: 'default']);
+        $hasFile = $cache->html_path !== null && Storage::disk(self::disk())->exists($cache->html_path);
+
+        return self::refresh($repo, $ref, $cache, $hasFile);
+    }
+
+    private static function refresh(string $repo, ?string $ref, ReadmeCache $cache, bool $hasFile): ?string
+    {
+        $refKey = $ref ?: 'default';
+        $disk = Storage::disk(self::disk());
 
         // Only send If-None-Match when the cached file is actually on disk.
         // Otherwise a 304 (etag still matches) would leave us with no body to

@@ -18,6 +18,10 @@ return [
     |       'throw'  => false,
     |   ],
     |
+    | With revalidate_in_background on and the queue worker on another host,
+    | this disk must be shared storage both the web process and the worker
+    | can access, or the web host never sees the refreshed HTML.
+    |
     */
     'disk' => env('GITHUB_README_DISK', 'local'),
 
@@ -32,6 +36,27 @@ return [
     |
     */
     'check_interval_minutes' => (int) env('GITHUB_README_CHECK_INTERVAL', 10),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Background Revalidation (stale-while-revalidate)
+    |--------------------------------------------------------------------------
+    |
+    | When enabled and a cached README is outside the check window, the stale
+    | file is returned immediately and the conditional GitHub request runs in
+    | a queued RevalidateReadmeJob (unique per repo/ref) instead of blocking
+    | the caller. A first fetch with no cached file always stays synchronous.
+    | Requires a queue worker. The queue name is null for the default queue.
+    |
+    | When the queue worker runs on a different host than the web process,
+    | the cache disk must be shared storage (e.g. S3 or a shared volume) that
+    | both can read and write. Otherwise the worker writes the refreshed HTML
+    | only to its own disk while the web host keeps serving its old file.
+    |
+    */
+    'revalidate_in_background' => (bool) env('GITHUB_README_REVALIDATE_IN_BACKGROUND', false),
+
+    'revalidate_queue' => env('GITHUB_README_REVALIDATE_QUEUE'),
 
     /*
     |--------------------------------------------------------------------------

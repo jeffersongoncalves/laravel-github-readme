@@ -2,8 +2,10 @@
 
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use JeffersonGoncalves\GitHubReadme\GitHubReadme;
+use JeffersonGoncalves\GitHubReadme\Jobs\RevalidateReadmeJob;
 use JeffersonGoncalves\GitHubReadme\Models\ReadmeCache;
 
 it('renders and stores the readme on the first fetch', function () {
@@ -71,6 +73,92 @@ it('reuses the cached file on a 304 not modified response', function () {
     expect($second)->toBe($first);
 
     Http::assertSentCount(2);
+});
+
+it('serves the stale file and queues a revalidation when background revalidation is on', function () {
+    Storage::fake('local');
+    Queue::fake();
+
+    Http::fake(['api.github.com/*' => Http::response('# Stale', 200, ['ETag' => '"e1"'])]);
+
+    $first = GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    config()->set('github-readme.revalidate_in_background', true);
+    $this->travel(11)->minutes();
+
+    $second = GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+    GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+    GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    expect($second)->toBe($first);
+
+    // Only the initial synchronous fetch hit GitHub; the burst queued one job.
+    Http::assertSentCount(1);
+    Queue::assertPushed(RevalidateReadmeJob::class, 1);
+    Queue::assertPushed(RevalidateReadmeJob::class, fn ($job) => $job->repo === 'owner/repo' && $job->ref === 'main');
+});
+
+it('still serves the stale file when dispatching the revalidation job fails', function () {
+    Storage::fake('local');
+
+    Http::fake(['api.github.com/*' => Http::response('# Stale', 200, ['ETag' => '"e1"'])]);
+
+    $first = GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    config()->set('github-readme.revalidate_in_background', true);
+    config()->set('queue.default', 'missing');
+    $this->travel(11)->minutes();
+
+    expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toBe($first);
+
+    Http::assertSentCount(1);
+});
+
+it('fetches synchronously when background revalidation is on but no file exists', function () {
+    Storage::fake('local');
+    Queue::fake();
+
+    config()->set('github-readme.revalidate_in_background', true);
+
+    Http::fake(['api.github.com/*' => Http::response('# First', 200, ['ETag' => '"e1"'])]);
+
+    expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toContain('First');
+
+    Http::assertSentCount(1);
+    Queue::assertNothingPushed();
+});
+
+it('does not queue a revalidation when background revalidation is off', function () {
+    Storage::fake('local');
+    Queue::fake();
+
+    Http::fakeSequence('api.github.com/*')
+        ->push('# Conditional', 200, ['ETag' => '"e1"'])
+        ->push('', 304);
+
+    GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+    $this->travel(11)->minutes();
+    GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    Http::assertSentCount(2);
+    Queue::assertNothingPushed();
+});
+
+it('re-renders the readme when the revalidation job runs', function () {
+    Storage::fake('local');
+
+    Http::fakeSequence('api.github.com/*')
+        ->push('# Old', 200, ['ETag' => '"e1"'])
+        ->push('# New', 200, ['ETag' => '"e2"']);
+
+    GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    (new RevalidateReadmeJob('owner/repo', 'main'))->handle();
+
+    $cache = ReadmeCache::query()->where('repo', 'owner/repo')->where('ref', 'main')->first();
+
+    expect($cache->etag)->toBe('"e2"')
+        ->and(Storage::disk('local')->get($cache->html_path))->toContain('New');
 });
 
 it('rewrites relative image src to raw.githubusercontent', function () {
