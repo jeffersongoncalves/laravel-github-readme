@@ -18,6 +18,12 @@ use League\CommonMark\MarkdownConverter;
 class GitHubReadme
 {
     /**
+     * An HTML attribute value in any quoting style: "double" (group 1),
+     * 'single' (group 2) or unquoted (group 3).
+     */
+    private const ATTR_VALUE = '(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'>]+))';
+
+    /**
      * Return the rendered README HTML for a repo, backed by a disk cache.
      *
      * Flow: within the check window the cached file is served with no GitHub
@@ -271,7 +277,9 @@ class GitHubReadme
      * absolute GitHub blob URLs. README links like `[License](LICENSE)` come
      * out as `<a href="LICENSE">` and would otherwise resolve to a 404 under
      * the local site path. Absolute URLs, mailto/tel/hash links and root-
-     * relative paths are passed through unchanged.
+     * relative paths are passed through unchanged. Double-quoted, single-
+     * quoted and unquoted hrefs are matched; rewritten ones are emitted
+     * double-quoted.
      */
     public static function rewriteRelativeLinks(string $html, string $repo, ?string $ref = null): string
     {
@@ -279,17 +287,18 @@ class GitHubReadme
         $base = "https://github.com/{$repo}/blob/{$branch}/";
 
         return preg_replace_callback(
-            '~<a([^>]*?)\shref="([^"]+)"([^>]*)>~i',
+            '~<a([^>]*?)\shref='.self::ATTR_VALUE.'([^>]*)>~i',
             function (array $m) use ($base): string {
-                $href = trim($m[2]);
+                // Only one of the three quoting-style groups is non-empty.
+                $href = trim($m[2].$m[3].$m[4]);
 
                 if ($href === '' || preg_match('~^(https?:|//|mailto:|tel:|javascript:|data:|#)~i', $href)) {
                     return $m[0];
                 }
 
-                $url = $base.ltrim($href, './');
+                $url = str_replace('"', '&quot;', $base.ltrim($href, './'));
 
-                return '<a'.$m[1].' href="'.$url.'"'.$m[3].'>';
+                return '<a'.$m[1].' href="'.$url.'"'.$m[5].'>';
             },
             $html
         ) ?? $html;
@@ -321,9 +330,20 @@ class GitHubReadme
         ) ?? $markdown;
 
         // Raw HTML images: <img ... src="src" ...> — common in README logo/banner blocks.
+        // Single-quoted and unquoted src are matched too; rewritten ones are emitted double-quoted.
         return preg_replace_callback(
-            '~(<img\b[^>]*?\ssrc=")([^"]+)(")~i',
-            fn ($m) => $m[1].$rewrite($m[2]).$m[3],
+            '~<img\b([^>]*?)\ssrc='.self::ATTR_VALUE.'~i',
+            function (array $m) use ($rewrite): string {
+                // Trailing unmatched groups are absent from $m, hence the ??.
+                $src = trim($m[2].($m[3] ?? '').($m[4] ?? ''));
+                $url = $rewrite($src);
+
+                if ($src === '' || $url === $src) {
+                    return $m[0];
+                }
+
+                return '<img'.$m[1].' src="'.str_replace('"', '&quot;', $url).'"';
+            },
             $markdown
         ) ?? $markdown;
     }
