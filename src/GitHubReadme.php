@@ -54,8 +54,16 @@ class GitHubReadme
         }
 
         // Stale-while-revalidate — serve the stale file now, check GitHub in a job.
+        // A queue or unique-lock store outage must not stop the stale file from being served.
         if ($hasFile && config('github-readme.revalidate_in_background')) {
-            RevalidateReadmeJob::dispatch($repo, $ref);
+            try {
+                RevalidateReadmeJob::dispatch($repo, $ref);
+            } catch (\Throwable $e) {
+                Log::warning('GitHubReadme revalidation dispatch failed', [
+                    'repo' => $repo,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return $disk->get($cache->html_path);
         }

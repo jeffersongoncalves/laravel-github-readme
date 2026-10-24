@@ -98,6 +98,22 @@ it('serves the stale file and queues a revalidation when background revalidation
     Queue::assertPushed(RevalidateReadmeJob::class, fn ($job) => $job->repo === 'owner/repo' && $job->ref === 'main');
 });
 
+it('still serves the stale file when dispatching the revalidation job fails', function () {
+    Storage::fake('local');
+
+    Http::fake(['api.github.com/*' => Http::response('# Stale', 200, ['ETag' => '"e1"'])]);
+
+    $first = GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    config()->set('github-readme.revalidate_in_background', true);
+    config()->set('queue.default', 'missing');
+    $this->travel(11)->minutes();
+
+    expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toBe($first);
+
+    Http::assertSentCount(1);
+});
+
 it('fetches synchronously when background revalidation is on but no file exists', function () {
     Storage::fake('local');
     Queue::fake();

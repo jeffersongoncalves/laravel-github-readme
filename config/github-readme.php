@@ -44,6 +44,11 @@ return [
     | the caller. A first fetch with no cached file always stays synchronous.
     | Requires a queue worker. The queue name is null for the default queue.
     |
+    | When the queue worker runs on a different host than the web process,
+    | the cache disk must be shared storage (e.g. S3 or a shared volume) that
+    | both can read and write. Otherwise the worker writes the refreshed HTML
+    | only to its own disk while the web host keeps serving its old file.
+    |
     */
     'revalidate_in_background' => (bool) env('GITHUB_README_REVALIDATE_IN_BACKGROUND', false),
 
