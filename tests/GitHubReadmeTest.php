@@ -385,6 +385,40 @@ it('leaves absolute and special anchor links untouched when rewriting', function
         ->and($out)->not->toContain('blob/main');
 });
 
+it('rewrites relative anchor links in every quoting style', function (string $html) {
+    $out = GitHubReadme::rewriteRelativeLinks($html, 'microg/GmsCore', 'master');
+
+    expect($out)->toBe('<a href="https://github.com/microg/GmsCore/blob/master/TRANSLATION.md">T</a>');
+})->with([
+    'unquoted' => '<a href=TRANSLATION.md>T</a>',
+    'single-quoted' => "<a href='TRANSLATION.md'>T</a>",
+    'double-quoted' => '<a href="TRANSLATION.md">T</a>',
+]);
+
+it('leaves unquoted absolute and anchor hrefs untouched', function (string $html) {
+    expect(GitHubReadme::rewriteRelativeLinks($html, 'owner/repo', 'main'))->toBe($html);
+})->with([
+    '<a href=https://example.com/x>X</a>',
+    '<a href=#x>X</a>',
+    "<a href='mailto:a@b.com'>X</a>",
+]);
+
+it('rewrites relative html image src in every quoting style', function (string $markdown) {
+    $out = GitHubReadme::rewriteRelativeAssets($markdown, 'owner/repo', 'main');
+
+    expect($out)->toBe('<img alt="logo" src="https://raw.githubusercontent.com/owner/repo/main/art/logo.png">');
+})->with([
+    'unquoted' => '<img alt="logo" src=art/logo.png>',
+    'single-quoted' => "<img alt=\"logo\" src='art/logo.png'>",
+    'double-quoted' => '<img alt="logo" src="art/logo.png">',
+]);
+
+it('leaves unquoted absolute image src untouched', function () {
+    $markdown = '<img src=https://cdn.example.com/logo.png>';
+
+    expect(GitHubReadme::rewriteRelativeAssets($markdown, 'owner/repo', 'main'))->toBe($markdown);
+});
+
 it('rewrites root-relative anchor links to repo blob urls', function () {
     $html = '<a href="/curriculum"><code>/curriculum</code></a>';
 
