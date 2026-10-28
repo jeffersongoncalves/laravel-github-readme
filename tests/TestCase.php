@@ -4,10 +4,12 @@ namespace JeffersonGoncalves\GitHubReadme\Tests;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use JeffersonGoncalves\GitHubReadme\GitHubReadmeServiceProvider;
+use JeffersonGoncalves\PestPluginDatabaseMigrations\LoadsPackageMigrations;
 use Orchestra\Testbench\TestCase as Orchestra;
 
 abstract class TestCase extends Orchestra
 {
+    use LoadsPackageMigrations;
     use RefreshDatabase;
 
     protected function getPackageProviders($app): array
@@ -60,22 +62,6 @@ abstract class TestCase extends Orchestra
 
     protected function defineDatabaseMigrations(): void
     {
-        $stubsPath = __DIR__.'/../database/migrations';
-        $tempPath = sys_get_temp_dir().'/laravel-github-readme-migrations';
-
-        if (! is_dir($tempPath)) {
-            mkdir($tempPath, 0755, true);
-        }
-
-        foreach (glob($stubsPath.'/*.php.stub') as $stub) {
-            $filename = basename(str_replace('.php.stub', '.php', $stub));
-            $target = $tempPath.'/'.$filename;
-
-            if (! file_exists($target)) {
-                copy($stub, $target);
-            }
-        }
-
-        $this->loadMigrationsFrom($tempPath);
+        $this->loadPackageMigrations(GitHubReadmeServiceProvider::class);
     }
 }
