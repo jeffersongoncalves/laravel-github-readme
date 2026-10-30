@@ -2,6 +2,15 @@
 
 All notable changes to `laravel-github-readme` will be documented in this file.
 
+## v2.1.2 - 2026-10-30
+
+### Fixed
+
+- Log non-2xx GitHub API responses (404 bad ref, 401 bad credentials, 403 rate limit, 5xx) in `fetchConditional()` and `defaultBranch()` with repo, ref, status, GitHub's `message` and `X-RateLimit-Remaining`. Previously these failed silently (#26, #27).
+- Logging failures no longer interrupt the stale-cache fallback.
+
+**Full Changelog**: https://github.com/jeffersongoncalves/laravel-github-readme/compare/v2.1.1...v2.1.2
+
 ## v2.1.1 - 2026-10-28
 
 Tests now load the package migrations with jeffersongoncalves/pest-plugin-database-migrations, in the order declared by the service provider, instead of copying the .php.stub files by hand. No runtime changes.
