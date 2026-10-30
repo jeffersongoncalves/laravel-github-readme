@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use JeffersonGoncalves\GitHubReadme\GitHubReadme;
@@ -245,6 +246,49 @@ it('returns null on a github error when no cached file exists', function () {
     ]);
 
     expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toBeNull();
+});
+
+it('logs github error responses with the api message', function () {
+    Storage::fake('local');
+    Log::spy();
+
+    Http::fake([
+        'api.github.com/repos/owner/repo/readme*' => Http::response(
+            ['message' => 'No commit found for the ref master'],
+            404,
+            ['X-RateLimit-Remaining' => '4999'],
+        ),
+    ]);
+
+    expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'master'))->toBeNull();
+
+    Log::shouldHaveReceived('warning')->with('GitHubReadme API request returned an error status', [
+        'repo' => 'owner/repo',
+        'ref' => 'master',
+        'status' => 404,
+        'message' => 'No commit found for the ref master',
+        'rate_limit_remaining' => '4999',
+    ]);
+});
+
+it('logs github error responses on the default branch lookup', function () {
+    Storage::fake('local');
+    Log::spy();
+
+    Http::fake([
+        'api.github.com/repos/owner/repo/readme*' => Http::response('# Hi', 200),
+        'api.github.com/repos/owner/repo' => Http::response(['message' => 'Bad credentials'], 401),
+    ]);
+
+    GitHubReadme::fetchHtml('https://github.com/owner/repo');
+
+    Log::shouldHaveReceived('warning')->with('GitHubReadme default branch lookup returned an error status', [
+        'repo' => 'owner/repo',
+        'ref' => null,
+        'status' => 401,
+        'message' => 'Bad credentials',
+        'rate_limit_remaining' => null,
+    ]);
 });
 
 it('serves the stale cached file when the github request times out', function () {

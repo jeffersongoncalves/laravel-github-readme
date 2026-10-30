@@ -4,6 +4,7 @@ namespace JeffersonGoncalves\GitHubReadme;
 
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -388,6 +389,8 @@ class GitHubReadme
             ];
         }
 
+        self::logErrorResponse('GitHubReadme API request returned an error status', $repo, $ref, $response);
+
         return ['status' => $response->status(), 'body' => null, 'etag' => $etag];
     }
 
@@ -410,9 +413,30 @@ class GitHubReadme
             return null;
         }
 
-        $branch = $response->successful() ? $response->json('default_branch') : null;
+        if (! $response->successful()) {
+            self::logErrorResponse('GitHubReadme default branch lookup returned an error status', $repo, null, $response);
+
+            return null;
+        }
+
+        $branch = $response->json('default_branch');
 
         return is_string($branch) ? $branch : null;
+    }
+
+    /**
+     * Log a non-2xx GitHub response; GitHub's `message` field names the cause
+     * (bad ref, bad credentials, rate limit).
+     */
+    private static function logErrorResponse(string $event, string $repo, ?string $ref, Response $response): void
+    {
+        Log::warning($event, [
+            'repo' => $repo,
+            'ref' => $ref,
+            'status' => $response->status(),
+            'message' => $response->json('message'),
+            'rate_limit_remaining' => $response->header('X-RateLimit-Remaining') ?: null,
+        ]);
     }
 
     /**
