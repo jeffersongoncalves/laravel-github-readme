@@ -426,17 +426,24 @@ class GitHubReadme
 
     /**
      * Log a non-2xx GitHub response; GitHub's `message` field names the cause
-     * (bad ref, bad credentials, rate limit).
+     * (bad ref, bad credentials, rate limit). A logging failure (e.g. an
+     * unwritable log file) must not break the caller's fallback.
      */
     private static function logErrorResponse(string $event, string $repo, ?string $ref, Response $response): void
     {
-        Log::warning($event, [
-            'repo' => $repo,
-            'ref' => $ref,
-            'status' => $response->status(),
-            'message' => $response->json('message'),
-            'rate_limit_remaining' => $response->header('X-RateLimit-Remaining') ?: null,
-        ]);
+        $remaining = $response->header('X-RateLimit-Remaining');
+
+        try {
+            Log::warning($event, [
+                'repo' => $repo,
+                'ref' => $ref,
+                'status' => $response->status(),
+                'message' => $response->json('message'),
+                'rate_limit_remaining' => $remaining !== '' ? $remaining : null,
+            ]);
+        } catch (\Throwable) {
+            // Best-effort logging.
+        }
     }
 
     /**

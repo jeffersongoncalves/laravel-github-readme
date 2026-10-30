@@ -271,6 +271,45 @@ it('logs github error responses with the api message', function () {
     ]);
 });
 
+it('keeps a zero rate limit remaining header in the log context', function () {
+    Storage::fake('local');
+    Log::spy();
+
+    Http::fake([
+        'api.github.com/*' => Http::response(
+            ['message' => 'API rate limit exceeded'],
+            403,
+            ['X-RateLimit-Remaining' => '0'],
+        ),
+    ]);
+
+    GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    Log::shouldHaveReceived('warning')->with('GitHubReadme API request returned an error status', [
+        'repo' => 'owner/repo',
+        'ref' => 'main',
+        'status' => 403,
+        'message' => 'API rate limit exceeded',
+        'rate_limit_remaining' => '0',
+    ]);
+});
+
+it('still serves the stale file when logging the error response throws', function () {
+    Storage::fake('local');
+
+    Http::fakeSequence('api.github.com/*')
+        ->push('# Original', 200, ['ETag' => '"e1"'])
+        ->push(['message' => 'Server Error'], 500);
+
+    $first = GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    $this->travel(11)->minutes();
+
+    Log::shouldReceive('warning')->andThrow(new RuntimeException('log file not writable'));
+
+    expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toBe($first);
+});
+
 it('logs github error responses on the default branch lookup', function () {
     Storage::fake('local');
     Log::spy();
