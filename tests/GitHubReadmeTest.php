@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use JeffersonGoncalves\GitHubReadme\GitHubReadme;
@@ -245,6 +246,88 @@ it('returns null on a github error when no cached file exists', function () {
     ]);
 
     expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toBeNull();
+});
+
+it('logs github error responses with the api message', function () {
+    Storage::fake('local');
+    Log::spy();
+
+    Http::fake([
+        'api.github.com/repos/owner/repo/readme*' => Http::response(
+            ['message' => 'No commit found for the ref master'],
+            404,
+            ['X-RateLimit-Remaining' => '4999'],
+        ),
+    ]);
+
+    expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'master'))->toBeNull();
+
+    Log::shouldHaveReceived('warning')->with('GitHubReadme API request returned an error status', [
+        'repo' => 'owner/repo',
+        'ref' => 'master',
+        'status' => 404,
+        'message' => 'No commit found for the ref master',
+        'rate_limit_remaining' => '4999',
+    ]);
+});
+
+it('keeps a zero rate limit remaining header in the log context', function () {
+    Storage::fake('local');
+    Log::spy();
+
+    Http::fake([
+        'api.github.com/*' => Http::response(
+            ['message' => 'API rate limit exceeded'],
+            403,
+            ['X-RateLimit-Remaining' => '0'],
+        ),
+    ]);
+
+    GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    Log::shouldHaveReceived('warning')->with('GitHubReadme API request returned an error status', [
+        'repo' => 'owner/repo',
+        'ref' => 'main',
+        'status' => 403,
+        'message' => 'API rate limit exceeded',
+        'rate_limit_remaining' => '0',
+    ]);
+});
+
+it('still serves the stale file when logging the error response throws', function () {
+    Storage::fake('local');
+
+    Http::fakeSequence('api.github.com/*')
+        ->push('# Original', 200, ['ETag' => '"e1"'])
+        ->push(['message' => 'Server Error'], 500);
+
+    $first = GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    $this->travel(11)->minutes();
+
+    Log::shouldReceive('warning')->andThrow(new RuntimeException('log file not writable'));
+
+    expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toBe($first);
+});
+
+it('logs github error responses on the default branch lookup', function () {
+    Storage::fake('local');
+    Log::spy();
+
+    Http::fake([
+        'api.github.com/repos/owner/repo/readme*' => Http::response('# Hi', 200),
+        'api.github.com/repos/owner/repo' => Http::response(['message' => 'Bad credentials'], 401),
+    ]);
+
+    GitHubReadme::fetchHtml('https://github.com/owner/repo');
+
+    Log::shouldHaveReceived('warning')->with('GitHubReadme default branch lookup returned an error status', [
+        'repo' => 'owner/repo',
+        'ref' => null,
+        'status' => 401,
+        'message' => 'Bad credentials',
+        'rate_limit_remaining' => null,
+    ]);
 });
 
 it('serves the stale cached file when the github request times out', function () {
