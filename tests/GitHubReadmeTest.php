@@ -537,13 +537,18 @@ it('keeps the leading dot of dot-prefixed relative paths', function (string $src
     ['./docs/x.png', 'docs/x.png'],
     ['docs/x.png', 'docs/x.png'],
     ['../docs/x.png', 'docs/x.png'],
+    ['..', ''],
+    ['../..', ''],
 ]);
 
-it('appends lazyload attributes before a self-closing slash', function () {
-    $out = GitHubReadme::lazyloadImages('<img src="a.png"><img src="x" alt="y" />');
-
-    expect($out)->toBe('<img src="a.png" decoding="async"><img src="x" alt="y" decoding="async" loading="lazy">');
-});
+it('appends lazyload attributes before a self-closing slash', function (string $img, string $expected) {
+    expect(GitHubReadme::lazyloadImages('<img src="a.png">'.$img))
+        ->toBe('<img src="a.png" decoding="async">'.$expected);
+})->with([
+    'spaced slash' => ['<img src="x" alt="y" />', '<img src="x" alt="y" decoding="async" loading="lazy">'],
+    'slash after quote' => ['<img src="x"/>', '<img src="x" decoding="async" loading="lazy">'],
+    'unquoted url ending in slash' => ['<img src=https://cdn.example.com/avatar/>', '<img src=https://cdn.example.com/avatar/ decoding="async" loading="lazy">'],
+]);
 
 it('does not duplicate existing loading and decoding attributes', function () {
     $html = '<img src="a.png" loading="eager" decoding="sync">';

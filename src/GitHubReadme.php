@@ -222,7 +222,8 @@ class GitHubReadme
             '~<img\b([^>]*?)>~i',
             function (array $m) use (&$index): string {
                 // Drop a self-closing slash so extras don't land after it (`<img a="b" / x>`).
-                $attrs = rtrim($m[1], " \t\r\n/");
+                // Only a slash after whitespace/quote: an unquoted `src=x/` keeps its own.
+                $attrs = preg_replace('~(?:\s+/|(?<=["\'])/|^/)?\s*$~', '', $m[1]) ?? $m[1];
                 $isFirst = $index === 0;
                 $index++;
 
@@ -314,7 +315,7 @@ class GitHubReadme
      */
     private static function stripRelativePrefix(string $path): string
     {
-        return preg_replace('#^(?:\.{1,2}/|/)+#', '', $path) ?? $path;
+        return preg_replace('#^(?:\.{1,2}(?:/|$)|/)+#', '', $path) ?? $path;
     }
 
     public static function rewriteRelativeAssets(string $markdown, string $repo, ?string $ref = null): string
