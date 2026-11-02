@@ -221,7 +221,9 @@ class GitHubReadme
         return preg_replace_callback(
             '~<img\b([^>]*?)>~i',
             function (array $m) use (&$index): string {
-                $attrs = $m[1];
+                // Drop a self-closing slash so extras don't land after it (`<img a="b" / x>`).
+                // Only a slash after whitespace/quote: an unquoted `src=x/` keeps its own.
+                $attrs = preg_replace('~(?:\s+/|(?<=["\'])/|^/)?\s*$~', '', $m[1]) ?? $m[1];
                 $isFirst = $index === 0;
                 $index++;
 
@@ -297,12 +299,23 @@ class GitHubReadme
                     return $m[0];
                 }
 
-                $url = str_replace('"', '&quot;', $base.ltrim($href, './'));
+                $url = str_replace('"', '&quot;', $base.self::stripRelativePrefix($href));
 
                 return '<a'.$m[1].' href="'.$url.'"'.$m[5].'>';
             },
             $html
         ) ?? $html;
+    }
+
+    /**
+     * Strip leading `./`, `../` and `/` segments so the path joins the repo-root
+     * base URL. Prefix-only on purpose: `ltrim($path, './')` treats its argument
+     * as a character list and would eat the dot of `.github/logo.png`. `../`
+     * clamps to the root, matching how GitHub resolves paths above a root README.
+     */
+    private static function stripRelativePrefix(string $path): string
+    {
+        return preg_replace('#^(?:\.{1,2}(?:/|$)|/)+#', '', $path) ?? $path;
     }
 
     public static function rewriteRelativeAssets(string $markdown, string $repo, ?string $ref = null): string
@@ -320,7 +333,7 @@ class GitHubReadme
             // Drop the GitHub `?raw=true` hint — raw.githubusercontent serves raw bytes already.
             $clean = preg_replace('/[?&]raw=true\b/i', '', $src) ?? $src;
 
-            return $base.ltrim($clean, './');
+            return $base.self::stripRelativePrefix($clean);
         };
 
         // Markdown image syntax: ![alt](src)

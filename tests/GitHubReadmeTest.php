@@ -525,6 +525,31 @@ it('lazy-loads every image except the first and adds async decoding', function (
     expect(substr_count($out, 'decoding="async"'))->toBe(3);
 });
 
+it('keeps the leading dot of dot-prefixed relative paths', function (string $src, string $path) {
+    expect(GitHubReadme::rewriteRelativeAssets('<img src="'.$src.'">', 'owner/repo', 'master'))
+        ->toBe('<img src="https://raw.githubusercontent.com/owner/repo/master/'.$path.'">')
+        ->and(GitHubReadme::rewriteRelativeLinks('<a href="'.$src.'">x</a>', 'owner/repo', 'master'))
+        ->toBe('<a href="https://github.com/owner/repo/blob/master/'.$path.'">x</a>');
+})->with([
+    ['.github/x.png', '.github/x.png'],
+    ['./.github/x.png', '.github/x.png'],
+    ['/docs/x.png', 'docs/x.png'],
+    ['./docs/x.png', 'docs/x.png'],
+    ['docs/x.png', 'docs/x.png'],
+    ['../docs/x.png', 'docs/x.png'],
+    ['..', ''],
+    ['../..', ''],
+]);
+
+it('appends lazyload attributes before a self-closing slash', function (string $img, string $expected) {
+    expect(GitHubReadme::lazyloadImages('<img src="a.png">'.$img))
+        ->toBe('<img src="a.png" decoding="async">'.$expected);
+})->with([
+    'spaced slash' => ['<img src="x" alt="y" />', '<img src="x" alt="y" decoding="async" loading="lazy">'],
+    'slash after quote' => ['<img src="x"/>', '<img src="x" decoding="async" loading="lazy">'],
+    'unquoted url ending in slash' => ['<img src=https://cdn.example.com/avatar/>', '<img src=https://cdn.example.com/avatar/ decoding="async" loading="lazy">'],
+]);
+
 it('does not duplicate existing loading and decoding attributes', function () {
     $html = '<img src="a.png" loading="eager" decoding="sync">';
 
