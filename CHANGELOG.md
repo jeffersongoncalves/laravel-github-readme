@@ -2,6 +2,13 @@
 
 All notable changes to `laravel-github-readme` will be documented in this file.
 
+## v2.1.3 - 2026-11-02
+
+### Fixed
+
+- Relative README paths starting with a dot (e.g. `.github/logo.png`) no longer lose the dot and 404. Only literal `./`, `../` and `/` prefixes are stripped; a terminal `..` resolves to the repo root. (#29, #30)
+- `lazyloadImages()` no longer appends attributes after a self-closing slash (`<img ... / decoding=...>`), while keeping the trailing slash of unquoted `src` URLs. (#29, #30)
+
 ## v2.1.2 - 2026-10-30
 
 ### Fixed
