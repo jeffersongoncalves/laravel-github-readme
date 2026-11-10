@@ -81,6 +81,7 @@ Other available helpers: `GitHubReadme::repoFromUrl()`, `GitHubReadme::rewriteRe
 2. **Conditional request** — outside the window a conditional `If-None-Match` request is made. A `304 Not Modified` reuses the cached file (and does **not** count against the rate limit).
 3. **Re-render** — a `200` response re-renders the markdown, rewrites relative assets/links, stores the file on disk and updates the `github_readme_cache` row.
 4. **Stale fallback** — on a network/API error the stale cached file is served when present.
+5. **Missing README** — a `404` with no cached file (no README, deleted repo, dead ref) is remembered for `missing_ttl_minutes`; within that window `fetchHtml()` returns `null` without calling GitHub. Other errors (403, 5xx, timeouts) are retried on the next fetch.
 5. **Background revalidation (opt-in)** — with `revalidate_in_background` enabled, a cached file outside the window is returned immediately and steps 2–4 run in a queued `RevalidateReadmeJob` (unique per repo/ref, so a burst of visits queues one job). A first fetch with no cached file stays synchronous. Requires a running queue worker. If the worker runs on a different host than the web process, the cache `disk` must be shared storage (e.g. S3 or a shared volume) that both can access; otherwise the worker writes the refreshed HTML only to its own disk.
 
 ## Configuration
@@ -92,6 +93,9 @@ return [
 
     // Minutes a freshly verified README is served without contacting GitHub.
     'check_interval_minutes' => (int) env('GITHUB_README_CHECK_INTERVAL', 10),
+
+    // Minutes a README 404 is remembered so it isn't re-requested on every fetch.
+    'missing_ttl_minutes' => (int) env('GITHUB_README_MISSING_TTL', 1440),
 
     // Serve stale READMEs immediately and revalidate them in a queued job.
     'revalidate_in_background' => (bool) env('GITHUB_README_REVALIDATE_IN_BACKGROUND', false),
