@@ -39,6 +39,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Missing README TTL
+    |--------------------------------------------------------------------------
+    |
+    | Minutes a 404 (repo without a README, deleted/renamed repo, or a ref
+    | that no longer exists) is remembered when no cached file exists. Within
+    | this window fetchHtml() returns null without calling GitHub. Other
+    | errors (403 rate limit, 5xx, timeouts) are never negative-cached.
+    |
+    */
+    'missing_ttl_minutes' => (int) env('GITHUB_README_MISSING_TTL', 1440),
+
+    /*
+    |--------------------------------------------------------------------------
     | Background Revalidation (stale-while-revalidate)
     |--------------------------------------------------------------------------
     |

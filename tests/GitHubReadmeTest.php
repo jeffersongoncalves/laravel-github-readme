@@ -248,6 +248,77 @@ it('returns null on a github error when no cached file exists', function () {
     expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toBeNull();
 });
 
+it('negative-caches a 404 so the next fetch skips github', function () {
+    Storage::fake('local');
+
+    Http::fake(['api.github.com/*' => Http::response(['message' => 'Not Found'], 404)]);
+
+    expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toBeNull();
+    $this->travel(60)->minutes();
+    expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toBeNull();
+
+    Http::assertSentCount(1);
+});
+
+it('re-requests a missing readme after the missing ttl', function () {
+    Storage::fake('local');
+
+    Http::fakeSequence('api.github.com/*')
+        ->push(['message' => 'Not Found'], 404)
+        ->push('# Appeared', 200, ['ETag' => '"e1"']);
+
+    expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toBeNull();
+
+    $this->travel(1441)->minutes();
+
+    expect(GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main'))->toContain('Appeared');
+
+    $cache = ReadmeCache::query()->where('repo', 'owner/repo')->where('ref', 'main')->first();
+
+    expect($cache->html_path)->not->toBeNull()
+        ->and($cache->etag)->toBe('"e1"');
+
+    Http::assertSentCount(2);
+});
+
+it('does not clobber a concurrent successful fetch with the 404 marker', function (bool $rowExists) {
+    Storage::fake('local');
+
+    if ($rowExists) {
+        // Row survives but its file doesn't (e.g. fresh deploy disk).
+        ReadmeCache::query()->create(['repo' => 'owner/repo', 'ref' => 'main', 'html_path' => 'gone.html', 'etag' => '"old"']);
+    }
+
+    // Another worker finishes a 200 while this request's 404 is in flight.
+    Http::fake(['api.github.com/*' => function () {
+        ReadmeCache::query()->upsert(
+            [['repo' => 'owner/repo', 'ref' => 'main', 'etag' => '"new"', 'html_path' => 'new.html', 'fetched_at' => now(), 'checked_at' => now(), 'created_at' => now(), 'updated_at' => now()]],
+            ['repo', 'ref'],
+            ['etag', 'html_path', 'fetched_at', 'checked_at', 'updated_at'],
+        );
+
+        return Http::response(['message' => 'Not Found'], 404);
+    }]);
+
+    GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    $cache = ReadmeCache::query()->where('repo', 'owner/repo')->where('ref', 'main')->sole();
+
+    expect($cache->html_path)->toBe('new.html')
+        ->and($cache->etag)->toBe('"new"');
+})->with(['existing row' => true, 'new row' => false]);
+
+it('does not negative-cache non-404 errors', function (int $status) {
+    Storage::fake('local');
+
+    Http::fake(['api.github.com/*' => Http::response(['message' => 'Error'], $status)]);
+
+    GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+    GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    Http::assertSentCount(2);
+})->with([403, 500, 503]);
+
 it('logs github error responses with the api message', function () {
     Storage::fake('local');
     Log::spy();

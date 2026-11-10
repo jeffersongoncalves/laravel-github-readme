@@ -60,6 +60,12 @@ class GitHubReadme
             return $disk->get($cache->html_path);
         }
 
+        // Negative cache — a recent 404 left the row with no file; don't re-ask GitHub.
+        if ($cache->html_path === null && $cache->checked_at !== null
+            && $cache->checked_at->gt(now()->subMinutes(self::missingTtlMinutes()))) {
+            return null;
+        }
+
         // Stale-while-revalidate — serve the stale file now, check GitHub in a job.
         // A queue or unique-lock store outage must not stop the stale file from being served.
         if ($hasFile && config('github-readme.revalidate_in_background')) {
@@ -161,6 +167,32 @@ class GitHubReadme
             $cache->save();
 
             return $disk->get($cache->html_path);
+        }
+
+        // 404 with no file (no README, deleted repo, dead ref) — remember it so
+        // fetchHtml() skips GitHub for missing_ttl_minutes. Best-effort, like the 200 write.
+        // Conditional so a concurrent 200 (which bumps fetched_at) is never clobbered.
+        if ($result['status'] === 404) {
+            $now = now();
+
+            try {
+                if ($cache->exists) {
+                    ReadmeCache::query()
+                        ->whereKey($cache->getKey())
+                        ->where('fetched_at', $cache->getRawOriginal('fetched_at'))
+                        ->update(['etag' => null, 'html_path' => null, 'checked_at' => $now, 'updated_at' => $now]);
+                } else {
+                    ReadmeCache::query()->insertOrIgnore([
+                        'repo' => $repo,
+                        'ref' => $refKey,
+                        'checked_at' => $now,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+                }
+            } catch (\Throwable) {
+                // A failed marker write only means the next fetch asks GitHub again.
+            }
         }
 
         return null;
@@ -527,6 +559,11 @@ class GitHubReadme
     private static function checkIntervalMinutes(): int
     {
         return (int) config('github-readme.check_interval_minutes', 10);
+    }
+
+    private static function missingTtlMinutes(): int
+    {
+        return (int) config('github-readme.missing_ttl_minutes', 1440);
     }
 
     private static function timeout(): int
