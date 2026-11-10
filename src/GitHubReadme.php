@@ -171,9 +171,25 @@ class GitHubReadme
 
         // 404 with no file (no README, deleted repo, dead ref) — remember it so
         // fetchHtml() skips GitHub for missing_ttl_minutes. Best-effort, like the 200 write.
+        // Conditional so a concurrent 200 (which bumps fetched_at) is never clobbered.
         if ($result['status'] === 404) {
+            $now = now();
+
             try {
-                $cache->fill(['etag' => null, 'html_path' => null, 'checked_at' => now()])->save();
+                if ($cache->exists) {
+                    ReadmeCache::query()
+                        ->whereKey($cache->getKey())
+                        ->where('fetched_at', $cache->getRawOriginal('fetched_at'))
+                        ->update(['etag' => null, 'html_path' => null, 'checked_at' => $now, 'updated_at' => $now]);
+                } else {
+                    ReadmeCache::query()->insertOrIgnore([
+                        'repo' => $repo,
+                        'ref' => $refKey,
+                        'checked_at' => $now,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+                }
             } catch (\Throwable) {
                 // A failed marker write only means the next fetch asks GitHub again.
             }

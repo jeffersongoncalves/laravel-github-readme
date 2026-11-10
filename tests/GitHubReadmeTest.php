@@ -281,6 +281,33 @@ it('re-requests a missing readme after the missing ttl', function () {
     Http::assertSentCount(2);
 });
 
+it('does not clobber a concurrent successful fetch with the 404 marker', function (bool $rowExists) {
+    Storage::fake('local');
+
+    if ($rowExists) {
+        // Row survives but its file doesn't (e.g. fresh deploy disk).
+        ReadmeCache::query()->create(['repo' => 'owner/repo', 'ref' => 'main', 'html_path' => 'gone.html', 'etag' => '"old"']);
+    }
+
+    // Another worker finishes a 200 while this request's 404 is in flight.
+    Http::fake(['api.github.com/*' => function () {
+        ReadmeCache::query()->upsert(
+            [['repo' => 'owner/repo', 'ref' => 'main', 'etag' => '"new"', 'html_path' => 'new.html', 'fetched_at' => now(), 'checked_at' => now(), 'created_at' => now(), 'updated_at' => now()]],
+            ['repo', 'ref'],
+            ['etag', 'html_path', 'fetched_at', 'checked_at', 'updated_at'],
+        );
+
+        return Http::response(['message' => 'Not Found'], 404);
+    }]);
+
+    GitHubReadme::fetchHtml('https://github.com/owner/repo', 'main');
+
+    $cache = ReadmeCache::query()->where('repo', 'owner/repo')->where('ref', 'main')->sole();
+
+    expect($cache->html_path)->toBe('new.html')
+        ->and($cache->etag)->toBe('"new"');
+})->with(['existing row' => true, 'new row' => false]);
+
 it('does not negative-cache non-404 errors', function (int $status) {
     Storage::fake('local');
 
