@@ -2,6 +2,19 @@
 
 All notable changes to `laravel-github-readme` will be documented in this file.
 
+## v2.1.4 - 2026-11-09
+
+### Fixed
+
+- Negative-cache README `404`s (no README, deleted/renamed repo, dead ref) so they aren't re-requested from GitHub on every fetch (#31, #32).
+- The 404 marker write is guarded so a concurrent successful fetch is never overwritten.
+
+### Added
+
+- `missing_ttl_minutes` config (`GITHUB_README_MISSING_TTL`, default `1440`): how long a 404 is remembered. 403, 5xx and timeouts are still retried.
+
+No migration required.
+
 ## v2.1.3 - 2026-11-02
 
 ### Fixed
